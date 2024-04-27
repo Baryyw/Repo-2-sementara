@@ -1,42 +1,47 @@
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import telebot
 import time
+import ping3
 
-def start(update, context):
-    chat_id = update.message.chat_id
-    context.bot.send_message(chat_id=chat_id, text='VERIFY YOUR NOT ROBOT ✅', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("VERIFY", callback_data='verify')]]))
+# Masukkan token bot Telegram Anda di sini
+TOKEN = '7162012025:AAE1Ud8F_W3xzzJ4UXKqwF4dxaboz7pLEjQ'
 
-def callback_query(update, context):
-    query = update.callback_query
-    chat_id = query.message.chat_id
-    if query.data == 'verify':
-        context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
-        context.bot.send_message(chat_id=chat_id, text='Masukkan URL atau IP :')
+# Inisialisasi bot
+bot = telebot.TeleBot(TOKEN)
 
-def message(update, context):
-    chat_id = update.message.chat_id
-    text = update.message.text
-    if text and not text.startswith('http://') and not text.startswith('https://'):
-        context.bot.send_message(chat_id=chat_id, text='Tolong masukkan URL yang valid (dimulai dengan http:// atau https://)')
-    else:
-        context.bot.send_message(chat_id=chat_id, text='Tunggu sebentar...')
-        start_time = time.time()
-        # Lakukan proses pengiriman request ke URL atau IP disini
-        # Contoh:
-        time.sleep(2) # Contoh delay 2 detik
-        end_time = time.time()
-        result_time = int((end_time - start_time) * 1000)
-        context.bot.send_message(chat_id=chat_id, text=f'Berapa MS resultnya: {result_time}ms')
+# Fungsi untuk menangani perintah /start
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = generate_markup()
+    bot.send_message(message.chat.id, "VERIFY YOU'RE NOT A ROBOT:", reply_markup=markup)
 
-def main():
-    updater = Updater(token='7162012025:AAE1Ud8F_W3xzzJ4UXKqwF4dxaboz7pLEjQ', use_context=True)
-    dispatcher = updater.dispatcher
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CallbackQueryHandler(callback_query))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, message))
-    updater.start_polling()
-    updater.idle()
+# Fungsi untuk membuat tombol "VERIFY" dalam format yang diinginkan
+def generate_markup():
+    markup = telebot.types.InlineKeyboardMarkup()
+    verify_button = telebot.types.InlineKeyboardButton('VERIFY', callback_data='verify')
+    markup.add(verify_button)
+    return markup
 
-if __name__ == '__main__':
-    main()
-                                   
+# Fungsi untuk menangani callback dari tombol "VERIFY"
+@bot.callback_query_handler(func=lambda call: call.data == 'verify')
+def callback_verify(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)  # Hapus pesan "VERIFY YOU'RE NOT A ROBOT"
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, "Masukkan IP atau URL:")
+
+# Fungsi untuk menangani pesan teks dari pengguna
+@bot.message_handler(func=lambda message: True)
+def handle_text(message):
+    address = message.text
+    bot.reply_to(message, "Tunggu sebentar..")
+    try:
+        response_time = ping3.ping(address)  # Ping alamat IP atau URL
+        if response_time is not None:
+           response_time_seconds = response_time * 1000  # Konversi ke detik
+           bot.send_message(message.chat.id, f"Result: {response_time_seconds:.2f}ms")
+        else:
+           bot.send_message(message.chat.id, "Ping timeout")
+    except ValueError:
+        bot.send_message(message.chat.id, "Invalid address")
+
+# Jalankan bot
+bot.polling()
